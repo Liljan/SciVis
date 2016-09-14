@@ -143,42 +143,36 @@ namespace inviwo {
 
 		for (size_t i = 0; i < outputSize.x; i++) {
 			for (size_t j = 0; j < outputSize.y; j++) {
-				// TODO: Task 4: Updated this code to use bilinear interpolation
-				size2_t mappedIndex(i / j);
-				mappedIndex = glm::clamp(mappedIndex, size2_t(0), inputSize - size_t(1));
 
-				size2_t A(i / sampleSize, j / sampleSize);
-				size2_t B(i / sampleSize + 1, j / sampleSize);
-				size2_t C(i / sampleSize, j / sampleSize + 1);
-				size2_t D(i / sampleSize + 1, j / sampleSize + 1);
+				size2_t P0(i / sampleSize, j / sampleSize);
+				size2_t P1(i / sampleSize + 1, j / sampleSize);
+				size2_t P2(i / sampleSize + 1, j / sampleSize + 1);
+				size2_t P3(i / sampleSize, j / sampleSize + 1);
 
-				double intesityAB, intesityCD;
-				if (A.x != B.x) {
-					intesityAB =
-						(B.x*sampleSize - mappedIndex.x) / (B.x - A.x) * in_img->getAsNormalizedDouble(A) +
-						(mappedIndex.x - A.x*sampleSize) / (B.x - A.x) * in_img->getAsNormalizedDouble(B);
 
-					intesityCD =
-						(D.x*sampleSize - mappedIndex.x) / (D.x - C.x) * in_img->getAsNormalizedDouble(C) +
-						(mappedIndex.x - C.x*sampleSize) / (D.x - C.x) * in_img->getAsNormalizedDouble(D);
-				} else {
-					intesityAB = in_img->getAsNormalizedDouble(A);
-					intesityCD = in_img->getAsNormalizedDouble(C);
-				}
+				auto f0 = in_img->getAsNormalizedDouble(P0);
+				auto f1 = in_img->getAsNormalizedDouble(P1);
+				auto f2 = in_img->getAsNormalizedDouble(P2);
+				auto f3 = in_img->getAsNormalizedDouble(P3);
 
-				double pixel_intensity;
-				if (A.y == C.y && A.x == B.x) {
-					pixel_intensity = in_img->getAsNormalizedDouble(A);
-				}
-				else {
-					pixel_intensity =
-						(A.y*sampleSize - mappedIndex.y) / (A.y - C.y) * intesityAB +
-						(mappedIndex.y - C.y*sampleSize) / (A.y - C.y) * intesityCD;
-				}
+				double scaledXMax = sampleSize * P2.x;
+				double scaledYMax = sampleSize * P2.y;
+				double scaledXMin = sampleSize * P0.x;
+				double scaledYMin = sampleSize * P0.y;
+
+				double u = (scaledXMax - static_cast<double>(i)) / (scaledXMax - scaledXMin);
+				double v = (scaledYMax - static_cast<double>(j)) / (scaledYMax - scaledYMin);
+
+
+				auto pixel_intensity =
+					(1 - u) * (1 - v) * f0 +
+					u * (1 - v) * f1 +
+					u * v * f2 +
+					(1 - u) * v * f3;
 
 				out_img->setFromNormalizedDVec4(
 					size2_t(i, j),
-					dvec4(pixel_intensity * pixelIntensityScaleFactor_.get()));  // set to output image
+					dvec4(pixel_intensity * pixelIntensityScaleFactor_.get()));  // set to output image */
 			}
 		}
 	}
