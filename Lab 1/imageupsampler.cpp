@@ -119,12 +119,19 @@ namespace inviwo {
 
 		for (size_t i = 0; i < outputSize.x; i++) {
 			for (size_t j = 0; j < outputSize.y; j++) {
-				// Divide the output indices with a scaling factor
-				size2_t mappedIndex(i / sampleSize, j / sampleSize);
-				mappedIndex = glm::clamp(mappedIndex, size2_t(0), inputSize - size_t(1));
+
+				float x = static_cast<float>(i) / (static_cast<float>(outputSize.x) - 1.f);
+				float y = static_cast<float>(j) / (static_cast<float>(outputSize.y) - 1.f);
+
+				x *= static_cast<float>(inputSize.x) - 1.f;
+				y *= static_cast<float>(inputSize.y) - 1.f;
+
+				size2_t P0(floor(x), floor(y));
+				
+				P0 = glm::clamp(P0, size2_t(0), inputSize - size_t(1));
 
 				// get pixel from input image at pixel coordinate mappedIndex
-				auto pixel_intensity = in_img->getAsNormalizedDouble(mappedIndex);
+				auto pixel_intensity = in_img->getAsNormalizedDouble(P0);
 
 				out_img->setFromNormalizedDVec4(
 					size2_t(i, j),
@@ -144,25 +151,29 @@ namespace inviwo {
 		for (size_t i = 0; i < outputSize.x; i++) {
 			for (size_t j = 0; j < outputSize.y; j++) {
 
-				size2_t P0(i / sampleSize, j / sampleSize);
-				size2_t P1(i / sampleSize + 1, j / sampleSize);
-				size2_t P2(i / sampleSize + 1, j / sampleSize + 1);
-				size2_t P3(i / sampleSize, j / sampleSize + 1);
+				float x = static_cast<float>(i) / (static_cast<float>(outputSize.x) - 1.f);
+				float y = static_cast<float>(j) / (static_cast<float>(outputSize.y) - 1.f);
 
+				x *= static_cast<float>(inputSize.x) - 1.f;
+				y *= static_cast<float>(inputSize.y) - 1.f;
+
+				size2_t P0(floor(x), floor(y));
+				size2_t P1(floor(x) + 1.f, floor(y));
+				size2_t P2(floor(x) + 1.f, floor(y) + 1.f);
+				size2_t P3(floor(x), floor(y) + 1.f);
+
+				double u = (P2.x - static_cast<double>(x)) / (P2.x - P0.x);
+				double v = (P2.y - static_cast<double>(y)) / (P2.y - P0.y);
+
+				P0 = glm::clamp(P0, size2_t(0), inputSize - size_t(1));
+				P1 = glm::clamp(P1, size2_t(0), inputSize - size_t(1));
+				P2 = glm::clamp(P2, size2_t(0), inputSize - size_t(1));
+				P3 = glm::clamp(P3, size2_t(0), inputSize - size_t(1));
 
 				auto f0 = in_img->getAsNormalizedDouble(P0);
 				auto f1 = in_img->getAsNormalizedDouble(P1);
 				auto f2 = in_img->getAsNormalizedDouble(P2);
 				auto f3 = in_img->getAsNormalizedDouble(P3);
-
-				double scaledXMax = sampleSize * P2.x;
-				double scaledYMax = sampleSize * P2.y;
-				double scaledXMin = sampleSize * P0.x;
-				double scaledYMin = sampleSize * P0.y;
-
-				double u = (scaledXMax - static_cast<double>(i)) / (scaledXMax - scaledXMin);
-				double v = (scaledYMax - static_cast<double>(j)) / (scaledYMax - scaledYMin);
-
 
 				auto pixel_intensity =
 					(1 - u) * (1 - v) * f0 +
@@ -212,11 +223,33 @@ namespace inviwo {
 		for (size_t i = 0; i < outputSize.x; i++) {
 			for (size_t j = 0; j < outputSize.y; j++) {
 				// TODO: Task 6: Updated this code to use barycentric interpolation
-				size2_t mappedIndex(i, j);
-				mappedIndex = glm::clamp(mappedIndex, size2_t(0), inputSize - size_t(1));
 
-				// get pixel from input image at pixel coordinate mappedIndex
-				auto pixel_intensity = in_img->getAsNormalizedDouble(mappedIndex);
+				float x = static_cast<float>(i) / (static_cast<float>(outputSize.x) - 1.f);
+				float y = static_cast<float>(j) / (static_cast<float>(outputSize.y) - 1.f);
+
+				x *= static_cast<float>(inputSize.x) - 1.f;
+				y *= static_cast<float>(inputSize.y) - 1.f;
+
+				size2_t A(floor(x), floor(y));
+				size2_t B(floor(x) + 1.f, floor(y));
+				size2_t C(floor(x), floor(y) + 1.f);
+
+				double u = (B.x - x) / (B.x - A.x);
+				double v = (C.y - y) / (C.y - A.y);
+
+				A = glm::clamp(A, size2_t(0), inputSize - size_t(1));
+				B = glm::clamp(B, size2_t(0), inputSize - size_t(1));
+				C = glm::clamp(C, size2_t(0), inputSize - size_t(1));
+
+				auto fA = in_img->getAsNormalizedDouble(A);
+				auto fB = in_img->getAsNormalizedDouble(B);
+				auto fC = in_img->getAsNormalizedDouble(C);
+
+				auto alpha = u + v - 1.0;
+				auto beta = 1.0 - v;
+				auto gamma = 1.0 - u;
+
+				auto pixel_intensity = alpha * fA + beta * fB + gamma * fC;
 
 				out_img->setFromNormalizedDVec4(
 					size2_t(i, j),
@@ -235,14 +268,9 @@ namespace inviwo {
 
 		for (size_t i = 0; i < outputSize.x; i++) {
 			for (size_t j = 0; j < outputSize.y; j++) {
-				double x = static_cast<double>(i) / outputSize.x;
-				double y = static_cast<double>(j) / outputSize.y;
-
-				size2_t mappedIndex(x * (inputSize.x - 1), y * (inputSize.y - 1));
 				auto pixel_intensity =
-					in_img->getAsNormalizedDouble(mappedIndex);  // get from input image
-
-				// scale factor for debugging
+					in_img->getAsNormalizedDouble(size2_t(i, j));  // get from input image
+																   // scale factor for debugging
 				pixel_intensity *= pixelIntensityScaleFactor_.get();
 
 				auto scalarColor = scalarColorMapping_.sample(pixel_intensity);
