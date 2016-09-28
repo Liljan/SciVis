@@ -126,8 +126,8 @@ namespace inviwo {
 				x *= static_cast<float>(inputSize.x) - 1.f;
 				y *= static_cast<float>(inputSize.y) - 1.f;
 
-				size2_t P0(floor(x), floor(y));
-				
+				size2_t P0(round(x), round(y));
+
 				P0 = glm::clamp(P0, size2_t(0), inputSize - size_t(1));
 
 				// get pixel from input image at pixel coordinate mappedIndex
@@ -170,16 +170,15 @@ namespace inviwo {
 				P2 = glm::clamp(P2, size2_t(0), inputSize - size_t(1));
 				P3 = glm::clamp(P3, size2_t(0), inputSize - size_t(1));
 
-				auto f0 = in_img->getAsNormalizedDouble(P0);
-				auto f1 = in_img->getAsNormalizedDouble(P1);
-				auto f2 = in_img->getAsNormalizedDouble(P2);
-				auto f3 = in_img->getAsNormalizedDouble(P3);
+				double f0 = in_img->getAsNormalizedDouble(P0);
+				double f1 = in_img->getAsNormalizedDouble(P1);
+				double f2 = in_img->getAsNormalizedDouble(P2);
+				double f3 = in_img->getAsNormalizedDouble(P3);
 
-				auto pixel_intensity =
-					(1 - u) * (1 - v) * f0 +
-					u * (1 - v) * f1 +
-					u * v * f2 +
-					(1 - u) * v * f3;
+				double a = (1 - u)*f1 + u*f0;
+				double b = (1 - u)*f2 + u*f3;
+
+				double pixel_intensity = (1 - v)*b + v*a;
 
 				out_img->setFromNormalizedDVec4(
 					size2_t(i, j),
@@ -196,14 +195,63 @@ namespace inviwo {
 		auto inputSize = inputImage->getDimensions();
 		auto outputSize = out_img->getDimensions();
 
+		ivec2 clamper = inputSize - size_t(1);
+
 		for (size_t i = 0; i < outputSize.x; i++) {
 			for (size_t j = 0; j < outputSize.y; j++) {
-				// TODO: Task 5: Updated this code to use quadratic interpolation
-				size2_t mappedIndex(i, j);
-				mappedIndex = glm::clamp(mappedIndex, size2_t(0), inputSize - size_t(1));
+
+				float x = static_cast<float>(i) / (static_cast<float>(outputSize.x) - 1.f);
+				float y = static_cast<float>(j) / (static_cast<float>(outputSize.y) - 1.f);
+
+				x *= static_cast<float>(inputSize.x) - 1.f;
+				y *= static_cast<float>(inputSize.y) - 1.f;
+
+				auto rx = round(x);
+				auto ry = round(y);
+
+				ivec2 P0(rx - 1.f, ry - 1.f);
+				ivec2 P1 = P0 + ivec2(1, 0);
+				ivec2 P2 = P0 + ivec2(2, 0);
+				ivec2 P3 = P0 + ivec2(0, 1);
+				ivec2 P4 = P0 + ivec2(1, 1);
+				ivec2 P5 = P0 + ivec2(2, 1);
+				ivec2 P6 = P0 + ivec2(0, 2);
+				ivec2 P7 = P0 + ivec2(1, 2);
+				ivec2 P8 = P0 + ivec2(2, 2);
+
+				double u = (static_cast<double>(x) - P0.x) / (P2.x - P0.x);
+				double v = (static_cast<double>(y) - P0.y) / (P7.y - P0.y);
+
+				P0 = glm::clamp(P0, ivec2(0), clamper);
+				P1 = glm::clamp(P1, ivec2(0), clamper);
+				P2 = glm::clamp(P2, ivec2(0), clamper);
+				P3 = glm::clamp(P3, ivec2(0), clamper);
+				P4 = glm::clamp(P4, ivec2(0), clamper);
+				P5 = glm::clamp(P5, ivec2(0), clamper);
+				P6 = glm::clamp(P6, ivec2(0), clamper);
+				P7 = glm::clamp(P7, ivec2(0), clamper);
+				P8 = glm::clamp(P8, ivec2(0), clamper);
+
+				double f0 = in_img->getAsNormalizedDouble(P0);
+				double f1 = in_img->getAsNormalizedDouble(P1);
+				double f2 = in_img->getAsNormalizedDouble(P2);
+				double f3 = in_img->getAsNormalizedDouble(P3);
+				double f4 = in_img->getAsNormalizedDouble(P4);
+				double f5 = in_img->getAsNormalizedDouble(P5);
+				double f6 = in_img->getAsNormalizedDouble(P6);
+				double f7 = in_img->getAsNormalizedDouble(P7);
+				double f8 = in_img->getAsNormalizedDouble(P8);
+
+
+				double a = (1.0 - u)*(1.0 - 2.0 * u)*f0 + 4.0 * u*(1.0 - u)*f1 + u*(2.0 * u - 1.0)*f2;
+				double b = (1.0 - u)*(1.0 - 2.0 * u)*f3 + 4.0 * u*(1.0 - u)*f4 + u*(2.0 * u - 1.0)*f5;
+				double c = (1.0 - u)*(1.0 - 2.0 * u)*f6 + 4.0 * u*(1.0 - u)*f7 + u*(2.0 * u - 1.0)*f8;
+
 
 				// get pixel from input image at pixel coordinate mappedIndex
-				auto pixel_intensity = in_img->getAsNormalizedDouble(mappedIndex);
+				double pixel_intensity =
+					(1.0 - v)*(1.0 - 2.0 * v)*a + 4.0 * v*(1.0 - v)*b + v*(2.0 * v - 1.0)*c;
+
 
 				out_img->setFromNormalizedDVec4(
 					size2_t(i, j),
@@ -220,6 +268,8 @@ namespace inviwo {
 		auto inputSize = inputImage->getDimensions();
 		auto outputSize = out_img->getDimensions();
 
+		ivec2 clamper = inputSize - size_t(1);
+
 		for (size_t i = 0; i < outputSize.x; i++) {
 			for (size_t j = 0; j < outputSize.y; j++) {
 				// TODO: Task 6: Updated this code to use barycentric interpolation
@@ -230,30 +280,51 @@ namespace inviwo {
 				x *= static_cast<float>(inputSize.x) - 1.f;
 				y *= static_cast<float>(inputSize.y) - 1.f;
 
-				size2_t A(floor(x), floor(y));
-				size2_t B(floor(x) + 1.f, floor(y));
-				size2_t C(floor(x), floor(y) + 1.f);
+				glm::vec2 p(x, y);
 
-				double u = (B.x - x) / (B.x - A.x);
-				double v = (C.y - y) / (C.y - A.y);
+				ivec2 A(floor(x), floor(y));
+				ivec2 B = A + ivec2(1, 0);
+				ivec2 C = A + ivec2(0, 1);
+				ivec2 D = A + ivec2(1, 1);
 
-				A = glm::clamp(A, size2_t(0), inputSize - size_t(1));
-				B = glm::clamp(B, size2_t(0), inputSize - size_t(1));
-				C = glm::clamp(C, size2_t(0), inputSize - size_t(1));
+				auto dist1 = glm::distance2(p, glm::vec2(A));
+				auto dist2 = glm::distance2(p, glm::vec2(D));
+
+				double u = x - A.x;
+				double v = y - A.y;
+
+				float alpha, beta, gamma;
+
+				if (dist1 > dist2) {
+					// right triangle
+					std::swap(A, D);
+					alpha = u + v - 1.0;
+					beta = 1 - v;
+
+					gamma = 1 - u;
+				}
+				else {
+					std::swap(B, C);
+					// left triangle
+					alpha = 1 - u - v;
+					beta = v;
+					gamma = u;
+				}
+
+				A = glm::clamp(A, ivec2(0), clamper);
+				B = glm::clamp(B, ivec2(0), clamper);
+				C = glm::clamp(C, ivec2(0), clamper);
 
 				auto fA = in_img->getAsNormalizedDouble(A);
 				auto fB = in_img->getAsNormalizedDouble(B);
 				auto fC = in_img->getAsNormalizedDouble(C);
-
-				auto alpha = u + v - 1.0;
-				auto beta = 1.0 - v;
-				auto gamma = 1.0 - u;
 
 				auto pixel_intensity = alpha * fA + beta * fB + gamma * fC;
 
 				out_img->setFromNormalizedDVec4(
 					size2_t(i, j),
 					dvec4(pixel_intensity * pixelIntensityScaleFactor_.get()));  // set to output image
+
 			}
 		}
 	}
