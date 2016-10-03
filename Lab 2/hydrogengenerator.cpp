@@ -75,9 +75,14 @@ namespace inviwo {
 
     inviwo::vec3 HydrogenGenerator::cartesianToSphereical(vec3 cartesian) {
 
+		auto pi_f = static_cast<float>(M_PI);
+
 		auto r = sqrt(cartesian.x*cartesian.x + cartesian.y*cartesian.y + cartesian.z*cartesian.z);
-		auto theta = glm::acos(cartesian.z / r);
-		auto phi = glm::atan(cartesian.y / cartesian.x);
+
+		auto theta = std::acosf(cartesian.z / r);
+		theta = glm::clamp(theta, 0.0f, 2.0f*pi_f);
+
+		auto phi = std::atan2f(cartesian.y , cartesian.x);
 
         return vec3(r, theta, phi);
     }
@@ -90,9 +95,11 @@ namespace inviwo {
 		auto term_1 = 1.0 / (81.0*sqrt(6.0*M_PI));
 		auto term_2 = sph.x*sph.x;
 		auto term_3 = exp(-sph.x / 3.0);
-		auto term_4 = 3.0*glm::cos(sph.y)*glm::cos(sph.y) - 1.0;
+		auto term_4 = 3.0*std::cos(sph.y)*std::cos(sph.y) - 1.0;
 
-        return term_1*term_2*term_3*term_4;
+		auto wave_func =  term_1*term_2*term_3*term_4;
+
+        return wave_func*wave_func;
     }
 
     inviwo::vec3 HydrogenGenerator::idTOCartesian(size3_t pos) {

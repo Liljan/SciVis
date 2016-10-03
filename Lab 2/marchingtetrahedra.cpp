@@ -35,136 +35,159 @@
 
 namespace inviwo {
 
-size_t MarchingTetrahedra::HashFunc::max = 1;
+	size_t MarchingTetrahedra::HashFunc::max = 1;
 
-const ProcessorInfo MarchingTetrahedra::processorInfo_{
-    "org.inviwo.MarchingTetrahedra",  // Class identifier
-    "Marching Tetrahedra",            // Display name
-    "TNM067",                         // Category
-    CodeState::Experimental,          // Code state
-    Tags::None,                       // Tags
-};
-const ProcessorInfo MarchingTetrahedra::getProcessorInfo() const { return processorInfo_; }
+	const ProcessorInfo MarchingTetrahedra::processorInfo_{
+		"org.inviwo.MarchingTetrahedra",  // Class identifier
+		"Marching Tetrahedra",            // Display name
+		"TNM067",                         // Category
+		CodeState::Experimental,          // Code state
+		Tags::None,                       // Tags
+	};
+	const ProcessorInfo MarchingTetrahedra::getProcessorInfo() const { return processorInfo_; }
 
-MarchingTetrahedra::MarchingTetrahedra()
-    : Processor()
-    , volume_("volume")
-    , mesh_("mesh")
-    , isoValue_("isoValue", "ISO value", 0.1f, 0.0f, 1.0f) {
-    addPort(volume_);
-    addPort(mesh_);
+	MarchingTetrahedra::MarchingTetrahedra()
+		: Processor()
+		, volume_("volume")
+		, mesh_("mesh")
+		, isoValue_("isoValue", "ISO value", 0.1f, 0.0f, 1.0f) {
+		addPort(volume_);
+		addPort(mesh_);
 
-    addProperty(isoValue_);
+		addProperty(isoValue_);
 
-    volume_.onChange([&]() {
-        if (!volume_.hasData()) {
-            return;
-        }
-        NetworkLock lock(getNetwork());
-        float iso = (isoValue_.get() - isoValue_.getMinValue()) /
-                    (isoValue_.getMaxValue() - isoValue_.getMinValue());
-        auto vr = volume_.getData()->dataMap_.valueRange;
-        isoValue_.setMinValue(vr.x);
-        isoValue_.setMaxValue(vr.y);
-        isoValue_.setIncrement(glm::abs(vr.y - vr.x) / 50.0f);
-        isoValue_.set(iso * (vr.y - vr.x) + vr.x);
-        isoValue_.setCurrentStateAsDefault();
-    });
-}
+		volume_.onChange([&]() {
+			if (!volume_.hasData()) {
+				return;
+			}
+			NetworkLock lock(getNetwork());
+			float iso = (isoValue_.get() - isoValue_.getMinValue()) /
+				(isoValue_.getMaxValue() - isoValue_.getMinValue());
+			auto vr = volume_.getData()->dataMap_.valueRange;
+			isoValue_.setMinValue(vr.x);
+			isoValue_.setMaxValue(vr.y);
+			isoValue_.setIncrement(glm::abs(vr.y - vr.x) / 50.0f);
+			isoValue_.set(iso * (vr.y - vr.x) + vr.x);
+			isoValue_.setCurrentStateAsDefault();
+		});
+	}
 
-void MarchingTetrahedra::process() {
-    auto volume = volume_.getData()->getRepresentation<VolumeRAM>();
-    MeshHelper mesh(volume_.getData());
+	void MarchingTetrahedra::process() {
+		auto volume = volume_.getData()->getRepresentation<VolumeRAM>();
+		MeshHelper mesh(volume_.getData());
 
-    const auto dims = volume->getDimensions();
-    MarchingTetrahedra::HashFunc::max = dims.x * dims.y * dims.z;
+		const auto dims = volume->getDimensions();
+		MarchingTetrahedra::HashFunc::max = dims.x * dims.y * dims.z;
 
-    float iso = isoValue_.get();
+		float iso = isoValue_.get();
 
-    util::IndexMapper3D index(dims);
+		util::IndexMapper3D index(dims);
 
-    const static size_t tetrahedraIds[6][4] = {{0, 1, 2, 5}, {1, 3, 2, 5}, {3, 2, 5, 7},
-                                               {0, 2, 4, 5}, {6, 4, 2, 5}, {6, 7, 5, 2}};
+		const static size_t tetrahedraIds[6][4] = { {0, 1, 2, 5}, {1, 3, 2, 5}, {3, 2, 5, 7},
+												   {0, 2, 4, 5}, {6, 4, 2, 5}, {6, 7, 5, 2} };
 
-    size3_t pos;
-    for (pos.z = 0; pos.z < dims.z - 1; ++pos.z) {
-        for (pos.y = 0; pos.y < dims.y - 1; ++pos.y) {
-            for (pos.x = 0; pos.x < dims.x - 1; ++pos.x) {
-                // Step 1: create current cell
-                // Use volume->getAsDouble to query values from the volume
-                // Spatial position should be between 0 and 1
-                // The voxel index should be the 1D-index for the voxel
-                Cell c;
+		size3_t pos;
+		for (pos.z = 0; pos.z < dims.z - 1; ++pos.z) {
+			for (pos.y = 0; pos.y < dims.y - 1; ++pos.y) {
+				for (pos.x = 0; pos.x < dims.x - 1; ++pos.x) {
+					// Step 1: create current cell
+					// Use volume->getAsDouble to query values from the volume
+					// Spatial position should be between 0 and 1
+					// The voxel index should be the 1D-index for the voxel
+					Cell c;
+					int ind{ 0 };
 
-                // Step 2: Subdivide cell into tetrahedra (hint: use tetrahedraIds)
-                std::vector<Tetrahedra> tetrahedras;
+					for (int x = 0; x < 2; ++x) {
+						for (int y = 0; y < 2; ++y) {
+							for (int z = 0; z < 2; ++z) {
+								c.voxels[ind].pos = glm::vec3(x, y, z);
+								c.voxels[ind].value = volume->getAsDouble(pos);
+								c.voxels[ind].index = ind;
+								++ind;
+							}
+						}
+					}
 
-                for (const Tetrahedra& tetrahedra : tetrahedras) {
-                    // Step three: Calculate for tetra case index
-                    int caseId = 0;
+					// Step 2: Subdivide cell into tetrahedra (hint: use tetrahedraIds)
+					std::vector<Tetrahedra> tetrahedras;
+					Tetrahedra t;
 
-                    // step four: Extract triangles
-                }
-            }
-        }
-    }
+					for (int i = 0; i < 6; ++i) {
 
-    mesh_.setData(mesh.toBasicMesh());
-}
+						t.voxels[0] = c.voxels[tetrahedraIds[i][0]];
+						t.voxels[1] = c.voxels[tetrahedraIds[i][1]];
+						t.voxels[2] = c.voxels[tetrahedraIds[i][2]];
+						t.voxels[3] = c.voxels[tetrahedraIds[i][3]];
 
-MarchingTetrahedra::MeshHelper::MeshHelper(std::shared_ptr<const Volume> vol)
-    : edgeToVertex_()
-    , vertices_()
-    , mesh_(std::make_shared<BasicMesh>())
-    , indexBuffer_(mesh_->addIndexBuffer(DrawType::Triangles, ConnectivityType::None)) {
-    mesh_->setModelMatrix(vol->getModelMatrix());
-    mesh_->setWorldMatrix(vol->getWorldMatrix());
-}
+						tetrahedras.push_back(t);
+					}
 
-void MarchingTetrahedra::MeshHelper::addTriangle(size_t i0, size_t i1, size_t i2) {
-    ivwAssert(i0 != i1, "i0 and i1 should not be the same value");
-    ivwAssert(i0 != i2, "i0 and i2 should not be the same value");
-    ivwAssert(i1 != i2, "i1 and i2 should not be the same value");
+					for (const Tetrahedra& tetrahedra : tetrahedras) {
+						// Step three: Calculate for tetra case index
+						int caseId = 0;
 
-    indexBuffer_->add(static_cast<glm::uint32_t>(i0));
-    indexBuffer_->add(static_cast<glm::uint32_t>(i1));
-    indexBuffer_->add(static_cast<glm::uint32_t>(i2));
+						// step four: Extract triangles
+					}
+				}
+			}
+		}
 
-    auto a = vertices_[i0].pos;
-    auto b = vertices_[i1].pos;
-    auto c = vertices_[i2].pos;
+		mesh_.setData(mesh.toBasicMesh());
+	}
 
-    vec3 n = glm::normalize(glm::cross(b - a, c - a));
-    vertices_[i0].normal += n;
-    vertices_[i1].normal += n;
-    vertices_[i2].normal += n;
-}
+	MarchingTetrahedra::MeshHelper::MeshHelper(std::shared_ptr<const Volume> vol)
+		: edgeToVertex_()
+		, vertices_()
+		, mesh_(std::make_shared<BasicMesh>())
+		, indexBuffer_(mesh_->addIndexBuffer(DrawType::Triangles, ConnectivityType::None)) {
+		mesh_->setModelMatrix(vol->getModelMatrix());
+		mesh_->setWorldMatrix(vol->getWorldMatrix());
+	}
 
-std::shared_ptr<BasicMesh> MarchingTetrahedra::MeshHelper::toBasicMesh() {
-    for (auto& vertex : vertices_) {
-        vertex.normal = glm::normalize(vertex.normal);
-    }
-    mesh_->addVertices(vertices_);
-    return mesh_;
-}
+	void MarchingTetrahedra::MeshHelper::addTriangle(size_t i0, size_t i1, size_t i2) {
+		ivwAssert(i0 != i1, "i0 and i1 should not be the same value");
+		ivwAssert(i0 != i2, "i0 and i2 should not be the same value");
+		ivwAssert(i1 != i2, "i1 and i2 should not be the same value");
 
-std::uint32_t MarchingTetrahedra::MeshHelper::addVertex(vec3 pos, size_t i, size_t j) {
-    ivwAssert(i != j, "i and j should not be the same value");
-    if (j < i) {
-        return addVertex(pos, j, i);
-    }
+		indexBuffer_->add(static_cast<glm::uint32_t>(i0));
+		indexBuffer_->add(static_cast<glm::uint32_t>(i1));
+		indexBuffer_->add(static_cast<glm::uint32_t>(i2));
 
-    auto edge = std::make_pair(i, j);
+		auto a = vertices_[i0].pos;
+		auto b = vertices_[i1].pos;
+		auto c = vertices_[i2].pos;
 
-    auto it = edgeToVertex_.find(edge);
+		vec3 n = glm::normalize(glm::cross(b - a, c - a));
+		vertices_[i0].normal += n;
+		vertices_[i1].normal += n;
+		vertices_[i2].normal += n;
+	}
 
-    if (it == edgeToVertex_.end()) {
-        edgeToVertex_[edge] = vertices_.size();
-        vertices_.push_back({pos, vec3(0, 0, 0), pos, vec4(0.7f, 0.7f, 0.7f, 1.0f)});
-        return vertices_.size() - 1;
-    }
+	std::shared_ptr<BasicMesh> MarchingTetrahedra::MeshHelper::toBasicMesh() {
+		for (auto& vertex : vertices_) {
+			vertex.normal = glm::normalize(vertex.normal);
+		}
+		mesh_->addVertices(vertices_);
+		return mesh_;
+	}
 
-    return it->second;
-}
+	std::uint32_t MarchingTetrahedra::MeshHelper::addVertex(vec3 pos, size_t i, size_t j) {
+		ivwAssert(i != j, "i and j should not be the same value");
+		if (j < i) {
+			return addVertex(pos, j, i);
+		}
+
+		auto edge = std::make_pair(i, j);
+
+		auto it = edgeToVertex_.find(edge);
+
+		if (it == edgeToVertex_.end()) {
+			edgeToVertex_[edge] = vertices_.size();
+			vertices_.push_back({ pos, vec3(0, 0, 0), pos, vec4(0.7f, 0.7f, 0.7f, 1.0f) });
+			return vertices_.size() - 1;
+		}
+
+		return it->second;
+	}
 
 }  // namespace
