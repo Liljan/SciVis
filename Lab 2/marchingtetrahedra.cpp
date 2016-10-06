@@ -97,12 +97,14 @@ namespace inviwo {
 					Cell c;
 					int ind{ 0 };
 
-					for (int x = 0; x < 2; ++x) {
+					for (int z = 0; z < 2; ++z) {
 						for (int y = 0; y < 2; ++y) {
-							for (int z = 0; z < 2; ++z) {
-								c.voxels[ind].pos = glm::vec3(x, y, z);
-								c.voxels[ind].value = volume->getAsDouble(pos);
-								c.voxels[ind].index = ind;
+							for (int x = 0; x < 2; ++x) {
+								c.voxels[ind].pos = glm::vec3(pos.x + x, pos.y + y, pos.z + z);
+								c.voxels[ind].value = volume->getAsDouble(c.voxels[ind].pos);
+
+								// voxel index is set to the global voxel index
+								c.voxels[ind].index = index(c.voxels[ind].pos);
 								++ind;
 							}
 						}
@@ -125,8 +127,158 @@ namespace inviwo {
 					for (const Tetrahedra& tetrahedra : tetrahedras) {
 						// Step three: Calculate for tetra case index
 						int caseId = 0;
+						if (tetrahedra.voxels[0].value < isoValue_) caseId |= 1;
+						if (tetrahedra.voxels[1].value < isoValue_) caseId |= 2;
+						if (tetrahedra.voxels[2].value < isoValue_) caseId |= 4;
+						if (tetrahedra.voxels[3].value < isoValue_) caseId |= 8;
 
+						//V = V1 + (isovalue - ISO1) (V2 - V1) / (ISO2 - ISO1)
 						// step four: Extract triangles
+						glm::vec3 p_0 = tetrahedra.voxels[0].pos;
+						glm::vec3 p_1 = tetrahedra.voxels[1].pos;
+						glm::vec3 p_2 = tetrahedra.voxels[2].pos;
+						glm::vec3 p_3 = tetrahedra.voxels[3].pos;
+						float iso_0 = tetrahedra.voxels[0].value;
+						float iso_1 = tetrahedra.voxels[1].value;
+						float iso_2 = tetrahedra.voxels[2].value;
+						float iso_3 = tetrahedra.voxels[3].value;
+
+						glm::vec3 inter_0, inter_1, inter_2, inter_3;
+						uint32_t ind_0, ind_1, ind_2, ind_3;
+
+						switch (caseId)
+						{
+						case 0:
+						case 15:
+							break;
+						case 1:
+						case 14:
+							inter_0 = p_0 + (isoValue_ - iso_0)*(p_1 - p_0) / (iso_1 - iso_0);
+							inter_1 = p_0 + (isoValue_ - iso_0)*(p_3 - p_0) / (iso_3 - iso_0);
+							inter_2 = p_0 + (isoValue_ - iso_0)*(p_2 - p_0) / (iso_2 - iso_0);
+
+							ind_0 = mesh.addVertex(inter_0, tetrahedra.voxels[0].index, tetrahedra.voxels[1].index);
+							ind_1 = mesh.addVertex(inter_1, tetrahedra.voxels[0].index, tetrahedra.voxels[3].index);
+							ind_2 = mesh.addVertex(inter_2, tetrahedra.voxels[0].index, tetrahedra.voxels[2].index);
+
+							if (caseId == 1)
+								mesh.addTriangle(ind_0, ind_1, ind_2);
+							else
+								mesh.addTriangle(ind_0, ind_2, ind_1);
+
+							break;
+							
+						case 2:
+						case 13:
+							inter_0 = p_1 + (isoValue_ - iso_1)*(p_3 - p_1) / (iso_3 - iso_1);
+							inter_1 = p_1 + (isoValue_ - iso_1)*(p_2 - p_1) / (iso_2 - iso_1);
+							inter_2 = p_1 + (isoValue_ - iso_1)*(p_0 - p_1) / (iso_0 - iso_1);
+
+							ind_0 = mesh.addVertex(inter_0, tetrahedra.voxels[1].index, tetrahedra.voxels[3].index);
+							ind_1 = mesh.addVertex(inter_1, tetrahedra.voxels[1].index, tetrahedra.voxels[2].index);
+							ind_2 = mesh.addVertex(inter_2, tetrahedra.voxels[1].index, tetrahedra.voxels[0].index);
+
+							if (caseId == 13)
+								mesh.addTriangle(ind_0, ind_1, ind_2);
+							else
+								mesh.addTriangle(ind_0, ind_2, ind_1);
+							break;
+						case 3:
+						case 12:
+							inter_0 = p_1 + (isoValue_ - iso_1)*(p_2 - p_1) / (iso_2 - iso_1);
+							inter_1 = p_1 + (isoValue_ - iso_1)*(p_3 - p_1) / (iso_3 - iso_1);
+							inter_2 = p_0 + (isoValue_ - iso_0)*(p_3 - p_0) / (iso_3 - iso_0);
+							inter_3 = p_0 + (isoValue_ - iso_0)*(p_2 - p_0) / (iso_2 - iso_0);
+
+							ind_0 = mesh.addVertex(inter_0, tetrahedra.voxels[1].index, tetrahedra.voxels[2].index);
+							ind_1 = mesh.addVertex(inter_1, tetrahedra.voxels[1].index, tetrahedra.voxels[3].index);
+							ind_2 = mesh.addVertex(inter_2, tetrahedra.voxels[0].index, tetrahedra.voxels[3].index);
+							ind_3 = mesh.addVertex(inter_3, tetrahedra.voxels[0].index, tetrahedra.voxels[2].index);
+
+							if (caseId == 3) {
+								mesh.addTriangle(ind_0, ind_1, ind_2);
+								mesh.addTriangle(ind_0, ind_2, ind_3);
+							}
+							else {
+								mesh.addTriangle(ind_2, ind_1, ind_0);
+								mesh.addTriangle(ind_3, ind_2, ind_0);
+							}							
+
+							break;
+						case 4:
+						case 11:
+							inter_0 = p_2 + (isoValue_ - iso_2)*(p_0 - p_2) / (iso_0 - iso_2);
+							inter_1 = p_2 + (isoValue_ - iso_2)*(p_1 - p_2) / (iso_1 - iso_2);
+							inter_2 = p_2 + (isoValue_ - iso_2)*(p_3 - p_2) / (iso_3 - iso_2);
+
+							ind_0 = mesh.addVertex(inter_0, tetrahedra.voxels[2].index, tetrahedra.voxels[0].index);
+							ind_1 = mesh.addVertex(inter_1, tetrahedra.voxels[2].index, tetrahedra.voxels[1].index);
+							ind_2 = mesh.addVertex(inter_2, tetrahedra.voxels[2].index, tetrahedra.voxels[3].index);
+
+							if (caseId == 11)
+								mesh.addTriangle(ind_0, ind_1, ind_2);
+							else
+								mesh.addTriangle(ind_0, ind_2, ind_1);
+
+							break;
+						case 5:
+						case 10:
+							inter_0 = p_0 + (isoValue_ - iso_0)*(p_3 - p_0) / (iso_3 - iso_0);
+							inter_1 = p_0 + (isoValue_ - iso_0)*(p_1 - p_0) / (iso_1 - iso_0);
+							inter_2 = p_2 + (isoValue_ - iso_2)*(p_1 - p_2) / (iso_1 - iso_2);
+							inter_3 = p_2 + (isoValue_ - iso_2)*(p_3 - p_2) / (iso_3 - iso_2);
+
+							ind_0 = mesh.addVertex(inter_0, tetrahedra.voxels[0].index, tetrahedra.voxels[3].index);
+							ind_1 = mesh.addVertex(inter_1, tetrahedra.voxels[0].index, tetrahedra.voxels[1].index);
+							ind_2 = mesh.addVertex(inter_2, tetrahedra.voxels[2].index, tetrahedra.voxels[1].index);
+							ind_3 = mesh.addVertex(inter_3, tetrahedra.voxels[2].index, tetrahedra.voxels[3].index);
+
+							if (caseId == 10) {
+								mesh.addTriangle(ind_0, ind_1, ind_2);
+								mesh.addTriangle(ind_0, ind_2, ind_3);
+							}
+							else {
+								mesh.addTriangle(ind_2, ind_1, ind_0);
+								mesh.addTriangle(ind_3, ind_2, ind_0);
+							}
+							break;
+						case 6:
+						case 9:
+							inter_0 = p_1 + (isoValue_ - iso_1)*(p_0 - p_1) / (iso_0 - iso_1);
+							inter_1 = p_1 + (isoValue_ - iso_1)*(p_3 - p_1) / (iso_3 - iso_1);
+							inter_2 = p_2 + (isoValue_ - iso_2)*(p_3 - p_2) / (iso_3 - iso_2);
+							inter_3 = p_2 + (isoValue_ - iso_2)*(p_0 - p_2) / (iso_0 - iso_2);
+
+							ind_0 = mesh.addVertex(inter_0, tetrahedra.voxels[1].index, tetrahedra.voxels[0].index);
+							ind_1 = mesh.addVertex(inter_1, tetrahedra.voxels[1].index, tetrahedra.voxels[3].index);
+							ind_2 = mesh.addVertex(inter_2, tetrahedra.voxels[2].index, tetrahedra.voxels[3].index);
+							ind_3 = mesh.addVertex(inter_3, tetrahedra.voxels[2].index, tetrahedra.voxels[0].index);
+
+							if (caseId == 9) {
+								mesh.addTriangle(ind_0, ind_1, ind_3);
+								mesh.addTriangle(ind_1, ind_2, ind_3);
+							}
+							else {
+								mesh.addTriangle(ind_3, ind_1, ind_0);
+								mesh.addTriangle(ind_3, ind_2, ind_1);
+							}
+							break;
+						case 7:
+						case 8:
+							inter_0 = p_3 + (isoValue_ - iso_3)*(p_2 - p_3) / (iso_2 - iso_3);
+							inter_1 = p_3 + (isoValue_ - iso_3)*(p_0 - p_3) / (iso_0 - iso_3);
+							inter_2 = p_3 + (isoValue_ - iso_3)*(p_1 - p_3) / (iso_1 - iso_3);
+
+							ind_0 = mesh.addVertex(inter_0, tetrahedra.voxels[3].index, tetrahedra.voxels[2].index);
+							ind_1 = mesh.addVertex(inter_1, tetrahedra.voxels[3].index, tetrahedra.voxels[0].index);
+							ind_2 = mesh.addVertex(inter_2, tetrahedra.voxels[3].index, tetrahedra.voxels[1].index);
+
+							if (caseId == 8)
+								mesh.addTriangle(ind_0, ind_1, ind_2);
+							else
+								mesh.addTriangle(ind_0, ind_2, ind_1);
+							break;
+						}
 					}
 				}
 			}
